@@ -467,7 +467,7 @@ def ext_pillar(
         Enable templating of pillar files.  Defaults to ``False``.
         
     :param pillar_name:
-        Enable contruction of Hostgroups through pillars.
+        Enable construction of Hostgroups through pillars.
 
         .. code-block:: yaml
 
@@ -480,7 +480,7 @@ def ext_pillar(
               - some:other:pillar
 
     :param grains_name:
-        Enable contruction of Hostgroups through grains.
+        Enable construction of Hostgroups through grains.
 
         .. code-block:: yaml
 
