@@ -708,4 +708,5 @@ def _ext_pillar(
         renderer_whitelist,
         template,
     )
-    return salt.utils.dictupdate.merge(ngroup_pillar, hgroup_pillar, host_pillar, strategy="recurse")
+    _pillar = salt.utils.dictupdate.merge(ngroup_pillar, hgroup_pillar, strategy="recurse")
+    return salt.utils.dictupdate.merge(_pillar, host_pillar, strategy="recurse")
