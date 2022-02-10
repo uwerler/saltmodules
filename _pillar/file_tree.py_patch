@@ -1,0 +1,267 @@
+--- file_tree.py	2022-02-09 17:43:22.542302320 +0100
++++ file_tree_ng.py	2022-02-10 11:57:55.333675484 +0100
+@@ -9,11 +9,12 @@
+ 
+ .. versionadded:: 2015.5.0
+ 
+-In this pillar, data is organized by either Minion ID or Nodegroup name.  To
+-setup pillar data for a specific Minion, place it in
++In this pillar, data is organized by either Minion ID, Nodegroup or Hostgrooup
++name.  To setup pillar data for a specific Minion, place it in
+ ``<root_dir>/hosts/<minion_id>``.  To setup pillar data for an entire
+ Nodegroup, place it in ``<root_dir>/nodegroups/<node_group>`` where
+-``<node_group>`` is the Nodegroup's name.
++``<node_group>`` is the Nodegroup's name or similiar for Hostgroup, place it in
++``<root_dir>/hostgroup/<node_group>``.
+ 
+ Example ``file_tree`` Pillar
+ ============================
+@@ -91,6 +92,24 @@
+               - yaml
+             template: True
+ 
++.. versionchanged:: 3004
++    Added optional grains and pillars for constructing Hostgroups.
++
++    .. code-block:: yaml
++
++        ext_pillar:
++          - file_tree:
++            root_dir: /path/to/root/directory
++            pillar_name: some:pillar
++            grains_name: 
++              - some:grain
++              - some:other:grain
++
++    Both can be configured as lists or single value.
++
++.. note::
++    For pillars or grains only the default delimiter ":" is recognized.
++
+ Assigning Pillar Data to Individual Hosts
+ -----------------------------------------
+ 
+@@ -158,6 +177,33 @@
+ # Set up logging
+ log = logging.getLogger(__name__)
+ 
++def _get_minion_data(minion_id, data_name, data_type):
++    """
++    Get minion data from master as a list where "data_type" is either
++    grains as the second element or pillar as the third element.
++    Only make a single check for lists without recursive traversal.
++    """
++
++    matchlist = []
++    minion_data = salt.utils.minions.get_minion_data(minion_id, __opts__)[data_type]
++
++    try:
++        _data = salt.utils.data.traverse_dict_and_list(
++             minion_data, data_name
++        )
++    except KeyError:
++        return
++
++    if _data is not None:
++        if type(_data) is list:
++            for item in _data:
++                matchlist.append(item)
++        else:
++            matchlist.append(_data)
++        return matchlist
++    else:
++        return
++
+ 
+ def _on_walk_error(err):
+     """
+@@ -272,16 +318,37 @@
+     renderer_blacklist=None,
+     renderer_whitelist=None,
+     template=False,
++    grains_name=None,
++    pillar_name=None,
+ ):
+     """
+     Compile pillar data from the given ``root_dir`` specific to Nodegroup names
+     and Minion IDs.
+ 
+     If a Minion's ID is not found at ``<root_dir>/host/<minion_id>`` or if it
+-    is not included in any Nodegroups named at
+-    ``<root_dir>/nodegroups/<node_group>``, no pillar data provided by this
++    is not included in any Nodegroups or Hostgroups named at
++    ``<root_dir>/nodegroups/<node_group>`` or
++    ``<root_dir>/hostgroups/<node_group>`` , no pillar data provided by this
+     pillar module will be available for that Minion.
+ 
++    .. versionchanged:: 3004
++        Added optional params for grains and pillars for constructing Hostgroups.
++    
++        .. code-block:: yaml
++    
++            ext_pillar:
++              - file_tree:
++                root_dir: /path/to/root/directory
++                pillar_name: some:pillar
++                grains_name: 
++                  - some:grain
++                  - some:other:grain
++    
++        Both can be configured as lists or single vaule.
++
++    .. note::
++        For pillars or grains only the default delimiter ":" is recognized.
++
+     .. versionchanged:: 2017.7.0
+         Templating/rendering has been added. You can now specify a default
+         render pipeline and a black- and whitelist of (dis)allowed renderers.
+@@ -398,6 +465,32 @@
+ 
+     :param template:
+         Enable templating of pillar files.  Defaults to ``False``.
++        
++    :param pillar_name:
++        Enable construction of Hostgroups through pillars.
++
++        .. code-block:: yaml
++
++            pillar_name: some:pillar
++
++        .. code-block:: yaml
++
++            pillar_name:
++              - some:pillar
++              - some:other:pillar
++
++    :param grains_name:
++        Enable construction of Hostgroups through grains.
++
++        .. code-block:: yaml
++
++            grains_name: some:grain
++
++        .. code-block:: yaml
++
++            grains_name:
++              - some:pillar
++              - some:other:pillar
+     """
+     # Not used
+     del pillar
+@@ -444,6 +537,8 @@
+             renderer_blacklist,
+             renderer_whitelist,
+             template,
++            grains_name,
++            pillar_name,
+         )
+         result_pillar = salt.utils.dictupdate.merge(
+             result_pillar, dir_pillar, strategy="recurse"
+@@ -461,11 +556,15 @@
+     renderer_blacklist,
+     renderer_whitelist,
+     template,
++    grains_name,
++    pillar_name,
+ ):
+     """
+     Compile pillar data for a single root_dir for the specified minion ID
+     """
+     log.debug("file_tree: reading %s", root_dir)
++    log.debug("file_tree: grains = %s", grains_name)
++    log.debug("file_tree: pillar = %s", pillar_name)
+ 
+     if not os.path.isdir(root_dir):
+         log.error(
+@@ -481,6 +580,71 @@
+         )
+         return {}
+ 
++    hgroup_pillar = {}
++    matchlist = []
++
++    # 1 = grains, 2 = pillars for _get_minion_data
++    if grains_name is not None:
++        if type(grains_name) is list:
++            for item in grains_name:
++                 match     = _get_minion_data(minion_id,item,1)
++                 matchlist = matchlist + match
++        elif type(grains_name) is str:
++             match     = _get_minion_data(minion_id,grains_name,1)
++             matchlist = matchlist + match
++        if debug is True:
++            log.debug("file_tree: found the following grains: %s %s",
++                      grains_name, match)
++
++    if pillar_name is not None:
++        if type(pillar_name) is list:
++            for item in pillar_name:
++                 match     = _get_minion_data(minion_id,item,2)
++                 matchlist = matchlist + match
++        elif type(pillar_name) is str:
++             match     = _get_minion_data(minion_id,pillar_name,2)
++             matchlist = matchlist + match
++        if debug is True:
++            log.debug("file_tree: found the following pillar: %s %s",
++                      pillar_name, match)
++
++    # remove duplicates
++    matchlist      = list(dict.fromkeys(matchlist))         
++    hostgroups_dir = os.path.join(root_dir, "hostgroups")
++
++    if debug is True:
++        log.debug("file_tree: Items for Hostgroup evaulation: %s", matchlist)
++
++    if os.path.exists(hostgroups_dir) and len(matchlist) > 0:
++        ext_pillar_dirs = os.listdir(hostgroups_dir)
++        if len(ext_pillar_dirs) > 0:
++            for hostgroup in ext_pillar_dirs:
++                if os.path.isdir(hostgroups_dir) and hostgroup in matchlist:
++                    hgroup_dir    = os.path.join(hostgroups_dir, str(hostgroup))
++                    hgroup_pillar = salt.utils.dictupdate.merge(
++                        hgroup_pillar,
++                        _construct_pillar(
++                            hgroup_dir,
++                            follow_dir_links,
++                            keep_newline,
++                            render_default,
++                            renderer_blacklist,
++                            renderer_whitelist,
++                            template,
++                        ),
++                        strategy="recurse",
++                    )
++        else:
++            if debug is True:
++                log.debug(
++                    "file_tree: no hostgroups found in file tree directory %s,"
++                    " skipping...",
++                    ext_pillar_dirs,
++                )
++    else:
++        if debug is True:
++            log.debug("file_tree: no hostgroups found in pillars")
++
+     ngroup_pillar = {}
+     nodegroups_dir = os.path.join(root_dir, "nodegroups")
+     if os.path.exists(nodegroups_dir) and len(__opts__.get("nodegroups", ())) > 0:
+@@ -529,11 +693,11 @@
+                 minion_id,
+                 host_dir,
+             )
+-        return ngroup_pillar
++        return salt.utils.dictupdate.merge(ngroup_pillar, hgroup_pillar, strategy="recurse")
+ 
+     if not os.path.isdir(host_dir):
+         log.error("file_tree: %s exists, but is not a directory", host_dir)
+-        return ngroup_pillar
++        return salt.utils.dictupdate.merge(ngroup_pillar, hgroup_pillar, strategy="recurse")
+ 
+     host_pillar = _construct_pillar(
+         host_dir,
+@@ -544,4 +708,4 @@
+         renderer_whitelist,
+         template,
+     )
+-    return salt.utils.dictupdate.merge(ngroup_pillar, host_pillar, strategy="recurse")
++    return salt.utils.dictupdate.merge(ngroup_pillar, hgroup_pillar, host_pillar, strategy="recurse")
