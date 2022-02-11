@@ -1,5 +1,5 @@
 --- file_tree.py	2022-02-09 17:43:22.542302320 +0100
-+++ file_tree_ng.py	2022-02-10 11:57:55.333675484 +0100
++++ /var/cache/salt/master/gitfs/refs/base/_pillar/file_tree_ng.py	2022-02-10 15:18:33.802878102 +0100
 @@ -9,11 +9,12 @@
  
  .. versionadded:: 2015.5.0
@@ -259,9 +259,10 @@
  
      host_pillar = _construct_pillar(
          host_dir,
-@@ -544,4 +708,4 @@
+@@ -544,4 +708,5 @@
          renderer_whitelist,
          template,
      )
 -    return salt.utils.dictupdate.merge(ngroup_pillar, host_pillar, strategy="recurse")
-+    return salt.utils.dictupdate.merge(ngroup_pillar, hgroup_pillar, host_pillar, strategy="recurse")
++    _pillar = salt.utils.dictupdate.merge(ngroup_pillar, hgroup_pillar, strategy="recurse")
++    return salt.utils.dictupdate.merge(_pillar, host_pillar, strategy="recurse")
