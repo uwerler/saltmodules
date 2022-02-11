@@ -587,24 +587,40 @@ def _ext_pillar(
     if grains_name is not None:
         if type(grains_name) is list:
             for item in grains_name:
-                 match     = _get_minion_data(minion_id,item,1)
-                 matchlist = matchlist + match
+                try:
+                    match     = _get_minion_data(minion_id,item,1)
+                    matchlist = matchlist + match
+                except:
+                    log.debug("file_tree: couldn't find any data for grain: %s", item)
+                    pass
         elif type(grains_name) is str:
-             match     = _get_minion_data(minion_id,grains_name,1)
-             matchlist = matchlist + match
-        if debug is True:
+            try:
+                match     = _get_minion_data(minion_id,grains_name,1)
+                matchlist = matchlist + match
+            except:
+                log.debug("file_tree: couldn't find any data for grain: %s", grains_name)
+                pass
+        if debug is True and len(matchlist) > 0:
             log.debug("file_tree: found the following grains: %s %s",
                       grains_name, match)
 
     if pillar_name is not None:
         if type(pillar_name) is list:
             for item in pillar_name:
-                 match     = _get_minion_data(minion_id,item,2)
-                 matchlist = matchlist + match
+                try:
+                     match     = _get_minion_data(minion_id,item,2)
+                     matchlist = matchlist + match
+                except:
+                    log.debug("file_tree: couldn't find any data for pillar: %s", item)
+                    pass
         elif type(pillar_name) is str:
-             match     = _get_minion_data(minion_id,pillar_name,2)
-             matchlist = matchlist + match
-        if debug is True:
+            try:
+                match     = _get_minion_data(minion_id,pillar_name,2)
+                matchlist = matchlist + match
+            except:
+                log.debug("file_tree: couldn't find any data for pillar: %s", pillar_name)
+                pass
+        if debug is True and len(matchlist) > 0:
             log.debug("file_tree: found the following pillar: %s %s",
                       pillar_name, match)
 
@@ -612,8 +628,8 @@ def _ext_pillar(
     matchlist      = list(dict.fromkeys(matchlist))         
     hostgroups_dir = os.path.join(root_dir, "hostgroups")
 
-    if debug is True:
-        log.debug("file_tree: Items for Hostgroup evaulation: %s", matchlist)
+    if debug is True and len(matchlist) > 0:
+        log.debug("file_tree: items for Hostgroup evaulation: %s", matchlist)
 
     if os.path.exists(hostgroups_dir) and len(matchlist) > 0:
         ext_pillar_dirs = os.listdir(hostgroups_dir)
@@ -643,7 +659,7 @@ def _ext_pillar(
                 )
     else:
         if debug is True:
-            log.debug("file_tree: no hostgroups found in pillars")
+            log.debug("file_tree: no hostgroups found in pillars or grains")
 
     ngroup_pillar = {}
     nodegroups_dir = os.path.join(root_dir, "nodegroups")
